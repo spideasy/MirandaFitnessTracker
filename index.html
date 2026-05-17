@@ -480,6 +480,8 @@
 </head>
 <body>
 
+
+
 <div class="bg-tulips">
   <div class="bg-tulip">🌷</div>
   <div class="bg-tulip">🌸</div>
@@ -972,6 +974,7 @@
 </div>
 
 <script>
+
 // ============================================================
 //  BOYFRIEND MESSAGES & PHOTOS
 // ============================================================
@@ -1216,6 +1219,7 @@ function init() {
   updateXP(0);
   updateAll();
   renderWeeklyChart();
+
 }
 
 // ============================================================
@@ -1977,7 +1981,7 @@ function renderWeightChart() {
       <div class="macro-val" style="color:${diffColor};">${diffSign}${diff}</div>
       <div class="macro-label">Change</div>
     </div>
-  \`;
+  `;
 }
 
 // ============================================================
@@ -2074,14 +2078,7 @@ function closeBfBubble() {
   if (bfBubbleTimeout) { clearTimeout(bfBubbleTimeout); bfBubbleTimeout = null; }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Use requestIdleCallback if available so UI paints first, then init
-  if (window.requestIdleCallback) {
-    requestIdleCallback(init, { timeout: 500 });
-  } else {
-    setTimeout(init, 0);
-  }
-});
+window.addEventListener('load', init);
 </script>
 </body>
 </html>
