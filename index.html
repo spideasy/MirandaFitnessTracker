@@ -956,6 +956,21 @@
   <span id="achievement-text">Achievement!</span>
 </div>
 
+
+<!-- Boyfriend Chat Bubble -->
+<div class="bf-bubble" id="bf-bubble">
+  <div class="bf-bubble-name">💕 from your boo</div>
+  <div class="bf-bubble-row">
+    <div style="position:relative;">
+      <div class="bf-bubble-msg" id="bf-bubble-msg">
+        <button class="bf-bubble-close" onclick="closeBfBubble()">✕</button>
+        <span id="bf-bubble-text"></span>
+      </div>
+    </div>
+    <img class="bf-avatar" id="bf-avatar" src="" alt="Your boo">
+  </div>
+</div>
+
 <script>
 // ============================================================
 //  BOYFRIEND MESSAGES & PHOTOS
@@ -2059,22 +2074,14 @@ function closeBfBubble() {
   if (bfBubbleTimeout) { clearTimeout(bfBubbleTimeout); bfBubbleTimeout = null; }
 }
 
-window.addEventListener('load', init);
+document.addEventListener('DOMContentLoaded', function() {
+  // Use requestIdleCallback if available so UI paints first, then init
+  if (window.requestIdleCallback) {
+    requestIdleCallback(init, { timeout: 500 });
+  } else {
+    setTimeout(init, 0);
+  }
+});
 </script>
-
-<!-- Boyfriend Chat Bubble -->
-<div class="bf-bubble" id="bf-bubble">
-  <div class="bf-bubble-name">💕 from your boo</div>
-  <div class="bf-bubble-row">
-    <div style="position:relative;">
-      <div class="bf-bubble-msg" id="bf-bubble-msg">
-        <button class="bf-bubble-close" onclick="closeBfBubble()">✕</button>
-        <span id="bf-bubble-text"></span>
-      </div>
-    </div>
-    <img class="bf-avatar" id="bf-avatar" src="" alt="Your boo">
-  </div>
-</div>
-
 </body>
 </html>
