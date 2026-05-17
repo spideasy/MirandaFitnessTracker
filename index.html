@@ -493,10 +493,17 @@
     <!-- Water tracker -->
     <div class="card">
       <div class="card-title"><span class="icon">💧</span> Water Today</div>
-      <div class="water-drops" id="water-drops"></div>
-      <div style="font-size:12px; color:var(--text-light); font-weight:700; margin-top:4px;">
-        <span id="water-count">0</span>/8 glasses — tap to track!
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <div>
+          <span style="font-size:36px; font-weight:900; color:#4AABDB;" id="water-total-oz">0</span>
+          <span style="font-size:16px; font-weight:700; color:var(--text-light);"> / <span id="water-goal-display">64</span> oz</span>
+        </div>
+        <button class="btn" style="background:linear-gradient(135deg,#7DD8F5,#4AABDB); color:white; padding:10px 16px; font-size:13px;" onclick="showModal('water-modal')">+ Add Water</button>
       </div>
+      <div style="height:10px; background:#E0F4FC; border-radius:10px; overflow:hidden; margin-bottom:8px;">
+        <div id="water-bar" style="height:100%; border-radius:10px; background:linear-gradient(90deg,#7DD8F5,#4AABDB); transition:width 0.6s cubic-bezier(0.34,1.56,0.64,1); width:0%;"></div>
+      </div>
+      <div id="water-log-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
     </div>
 
     <!-- Garden / Achievement -->
@@ -624,12 +631,16 @@
 
     <!-- Calorie Goal Setting -->
     <div class="card">
-      <div class="card-title"><span class="icon">🎯</span> My Calorie Goal</div>
+      <div class="card-title"><span class="icon">🎯</span> My Daily Goals</div>
       <div class="input-wrap">
         <label class="input-label">Daily Calorie Goal</label>
         <input class="input" type="number" id="calorie-goal-input" placeholder="e.g. 2000">
       </div>
-      <button class="btn btn-primary btn-full" onclick="saveGoal()">Save Goal ✨</button>
+      <div class="input-wrap">
+        <label class="input-label">Daily Water Goal (oz)</label>
+        <input class="input" type="number" id="water-goal-input" placeholder="e.g. 64">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveGoal()">Save Goals ✨</button>
     </div>
 
     <!-- Weekly history mini chart -->
@@ -816,6 +827,30 @@
   </div>
 </div>
 
+<!-- WATER MODAL -->
+<div class="modal-overlay" id="water-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💧 Log Water</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(8)">8 oz</button>
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(12)">12 oz</button>
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(16)">16 oz (bottle)</button>
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(20)">20 oz</button>
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(24)">24 oz</button>
+      <button class="summary-chip" style="background:#E0F4FC; color:#4AABDB;" onclick="quickWater(32)">32 oz (large)</button>
+    </div>
+    <div class="input-wrap">
+      <label class="input-label">Custom Amount (oz)</label>
+      <input class="input" type="number" id="water-custom-oz" placeholder="e.g. 14" min="1" max="200">
+    </div>
+    <button class="btn btn-full" style="background:linear-gradient(135deg,#7DD8F5,#4AABDB); color:white; font-weight:800; font-size:15px;" onclick="addWater()">+ Add 💧</button>
+    <div style="margin-top:10px;">
+      <button class="btn btn-secondary btn-full" onclick="closeModal('water-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Achievement Toast -->
 <div class="achievement-toast" id="achievement-toast">
   <span id="achievement-icon">🏆</span>
@@ -888,7 +923,8 @@ function loadState() {
     level: 1,
     days: {},
     streak: [],
-    calorieGoal: 2000
+    calorieGoal: 2000,
+    waterGoal: 64
   };
 }
 
@@ -899,7 +935,7 @@ function saveState() {
 function getToday() {
   if (!state.days[TODAY]) {
     state.days[TODAY] = {
-      food: [], exercise: [], water: 0,
+      food: [], exercise: [], water: [],
       mood: null, moodNote: '', weight: null
     };
   }
@@ -950,20 +986,9 @@ function init() {
     </button>
   `).join('');
 
-  // Water drops
-  const wd = document.getElementById('water-drops');
-  for (let i = 0; i < 8; i++) {
-    const btn = document.createElement('button');
-    btn.className = 'drop-btn';
-    btn.textContent = '💧';
-    btn.style.border = 'none'; btn.style.background = 'none';
-    btn.onclick = () => toggleWater(i);
-    btn.id = `drop-${i}`;
-    wd.appendChild(btn);
-  }
-
-  // Calorie goal input
+  // Goal inputs
   document.getElementById('calorie-goal-input').value = state.calorieGoal;
+  document.getElementById('water-goal-input').value = state.waterGoal || 64;
 
   // Load today's weight in input
   const tod = getToday();
@@ -1009,11 +1034,23 @@ function updateAll() {
   document.getElementById('cal-ring-fill').style.strokeDashoffset = offset;
 
   // Water
-  const wc = document.getElementById('water-count');
-  wc.textContent = tod.water;
-  for (let i = 0; i < 8; i++) {
-    const el = document.getElementById(`drop-${i}`);
-    if (el) el.className = 'drop-btn' + (i < tod.water ? ' filled' : '');
+  const waterEntries = Array.isArray(tod.water) ? tod.water : [];
+  const totalOz = waterEntries.reduce((s,w) => s + w.oz, 0);
+  const waterGoal = state.waterGoal || 64;
+  const wozEl = document.getElementById('water-total-oz');
+  const wbarEl = document.getElementById('water-bar');
+  const wgoalEl = document.getElementById('water-goal-display');
+  const wlistEl = document.getElementById('water-log-list');
+  if (wozEl) wozEl.textContent = totalOz;
+  if (wgoalEl) wgoalEl.textContent = waterGoal;
+  if (wbarEl) wbarEl.style.width = Math.min(totalOz / waterGoal * 100, 100) + '%';
+  if (wlistEl) {
+    wlistEl.innerHTML = waterEntries.map((w,i) => `
+      <div style="display:inline-flex; align-items:center; gap:4px; background:#E0F4FC; border-radius:10px; padding:4px 10px; font-size:12px; font-weight:800; color:#4AABDB;">
+        💧 ${w.oz} oz
+        <button onclick="deleteWater(${i})" style="background:none; border:none; cursor:pointer; font-size:12px; color:#7BBBD4; padding:0 0 0 2px; line-height:1;">✕</button>
+      </div>
+    `).join('') || '<span style="font-size:12px; color:var(--text-light); font-weight:700;">No water logged yet — stay hydrated! 💧</span>';
   }
 
   // Weight display
@@ -1041,7 +1078,7 @@ function updateAll() {
 
 function updateGarden() {
   const tod = getToday();
-  const totalActions = tod.food.length + tod.exercise.length + (tod.water >= 8 ? 2 : 0) + (tod.mood !== null ? 1 : 0);
+  const totalActions = tod.food.length + tod.exercise.length + (Array.isArray(tod.water) && tod.water.reduce((s,w)=>s+w.oz,0) >= (state.waterGoal||64) ? 2 : 0) + (tod.mood !== null ? 1 : 0);
   const flowers = ['🌷','🌸','🌺','🌼','🌻','🌹','💐','🌷','🌸','🌺'];
   const gf = document.getElementById('garden-flowers');
   const gm = document.getElementById('garden-msg');
@@ -1313,20 +1350,36 @@ async function fetchBarcode(barcode) {
     if (data.status === 1 && data.product) {
       const p = data.product;
       const n = p.nutriments;
+
+      // Serving size in grams — used to scale per-100g values if per-serving fields missing
+      const servingGrams = parseFloat(p.serving_quantity) || 0;
+      const scale = servingGrams > 0 ? servingGrams / 100 : 1;
+
+      // Prefer explicit _serving fields; fall back to _100g * (serving_grams/100)
+      // Never use raw _100g values directly as calories — they'd be per 100g, not per serving
+      const calPer100g = n['energy-kcal_100g'] || 0;
+      const calServing = n['energy-kcal_serving'] || (servingGrams > 0 ? calPer100g * scale : 0);
+
+      const protPer100g = n.proteins_100g || 0;
+      const carbPer100g = n.carbohydrates_100g || 0;
+      const fatPer100g = n.fat_100g || 0;
+
       const food = {
         name: p.product_name || 'Unknown Product',
         emoji: '📦',
-        cal: Math.round(n['energy-kcal_serving'] || n['energy-kcal_100g'] || 0),
-        protein: Math.round((n.proteins_serving || n.proteins_100g || 0) * 10) / 10,
-        carbs: Math.round((n.carbohydrates_serving || n.carbohydrates_100g || 0) * 10) / 10,
-        fat: Math.round((n.fat_serving || n.fat_100g || 0) * 10) / 10,
+        servingSize: servingGrams > 0 ? servingGrams + 'g' : (p.serving_size || '1 serving'),
+        cal: Math.round(calServing || calPer100g * scale || 0),
+        protein: Math.round((n.proteins_serving || protPer100g * scale || 0) * 10) / 10,
+        carbs: Math.round((n.carbohydrates_serving || carbPer100g * scale || 0) * 10) / 10,
+        fat: Math.round((n.fat_serving || fatPer100g * scale || 0) * 10) / 10,
         barcode
       };
       resultDiv.innerHTML = `
         <div style="background:var(--pink-light); border-radius:14px; padding:14px; text-align:center;">
           <div style="font-size:32px; margin-bottom:6px;">📦</div>
           <div style="font-weight:900; font-size:16px; color:var(--text); margin-bottom:4px;">${food.name}</div>
-          <div style="font-size:13px; color:var(--text-light);">${food.cal} kcal · P:${food.protein}g C:${food.carbs}g F:${food.fat}g</div>
+          <div style="font-size:13px; color:var(--text-light);">Per serving (${food.servingSize}): <strong style="color:var(--pink-deep)">${food.cal} kcal</strong></div>
+          <div style="font-size:12px; color:var(--text-light); margin-top:2px;">P:${food.protein}g · C:${food.carbs}g · F:${food.fat}g</div>
           <button class="btn btn-primary" style="margin-top:12px;" onclick='openServingModal(${JSON.stringify(food)})'>Add to Log 🌷</button>
         </div>
       `;
@@ -1538,11 +1591,28 @@ function logWeight() {
 // ============================================================
 //  WATER
 // ============================================================
-function toggleWater(i) {
+function quickWater(oz) {
+  document.getElementById('water-custom-oz').value = oz;
+}
+
+function addWater() {
+  const oz = parseInt(document.getElementById('water-custom-oz').value);
+  if (!oz || oz < 1 || oz > 200) { alert('Please enter a valid amount! 💧'); return; }
   const tod = getToday();
-  tod.water = i + 1 <= tod.water ? i : i + 1;
-  if (tod.water === 8) { updateXP(25); showAchievement('💧', '8 glasses! +25 XP 🎉'); }
+  if (!Array.isArray(tod.water)) tod.water = [];
+  tod.water.push({ oz, time: new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) });
+  const totalOz = tod.water.reduce((s,w) => s + w.oz, 0);
+  const goal = state.waterGoal || 64;
+  if (totalOz >= goal) { updateXP(25); showAchievement('💧', 'Daily water goal hit! +25 XP 🎉'); }
   else { updateXP(3); }
+  closeModal('water-modal');
+  document.getElementById('water-custom-oz').value = '';
+  updateAll();
+}
+
+function deleteWater(i) {
+  const tod = getToday();
+  if (Array.isArray(tod.water)) tod.water.splice(i, 1);
   updateAll();
 }
 
@@ -1551,11 +1621,13 @@ function toggleWater(i) {
 // ============================================================
 function saveGoal() {
   const val = parseInt(document.getElementById('calorie-goal-input').value);
-  if (!val || val < 500 || val > 5000) { alert('Please enter a valid goal between 500-5000! 🌷'); return; }
+  if (!val || val < 500 || val > 5000) { alert('Please enter a valid calorie goal between 500-5000! 🌷'); return; }
+  const wval = parseInt(document.getElementById('water-goal-input').value);
+  if (wval && wval >= 8 && wval <= 300) state.waterGoal = wval;
   state.calorieGoal = val;
   saveState();
   updateAll();
-  showAchievement('🎯', 'Calorie goal saved! 🌷');
+  showAchievement('🎯', 'Goals saved! 🌷');
 }
 
 // ============================================================
