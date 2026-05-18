@@ -494,10 +494,18 @@
 <div class="header">
   <div>
     <div class="header-title">🌷 Miranda's Bloom</div>
-    <div class="header-sub" id="date-display">Loading...</div>
+    <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+      <button onclick="changeDay(-1)" style="background:none;border:none;cursor:pointer;font-size:18px;padding:0;color:var(--pink-deep);line-height:1;">‹</button>
+      <div id="date-display" onclick="openDatePicker()" style="font-size:11px;color:var(--text-light);font-weight:700;cursor:pointer;text-decoration:underline dotted var(--pink-mid);">Loading...</div>
+      <button onclick="changeDay(1)" id="next-day-btn" style="background:none;border:none;cursor:pointer;font-size:18px;padding:0;color:var(--pink-deep);line-height:1;opacity:0.3;" disabled>›</button>
+    </div>
   </div>
-  <div class="xp-badge">🌸 <span id="xp-display">0</span> XP</div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <button id="today-btn" onclick="goToToday()" style="display:none;background:var(--pink-light);border:1.5px solid var(--pink-mid);border-radius:10px;padding:4px 10px;font-size:11px;font-weight:800;color:var(--pink-deep);cursor:pointer;">Today</button>
+    <div class="xp-badge">🌸 <span id="xp-display">0</span> XP</div>
+  </div>
 </div>
+<input type="date" id="date-picker-input" style="position:absolute;opacity:0;pointer-events:none;top:0;left:0;" onchange="onDatePickerChange(this.value)">
 
 <!-- XP Progress -->
 <div class="xp-bar-wrap">
@@ -1077,6 +1085,7 @@ const BF_MESSAGES = {
 //  STATE
 // ============================================================
 const TODAY = new Date().toISOString().split('T')[0];
+let activeDate = TODAY; // The date currently being viewed/edited
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MOODS = [
   {emoji:'😢', label:'Rough'},
@@ -1148,22 +1157,20 @@ function saveState() {
 }
 
 function getToday() {
-  if (!state.days[TODAY]) {
-    state.days[TODAY] = {
+  if (!state.days[activeDate]) {
+    state.days[activeDate] = {
       food: [], exercise: [], water: [],
       mood: null, moodNote: '', weight: null
     };
   }
-  return state.days[TODAY];
+  return state.days[activeDate];
 }
 
 // ============================================================
 //  INIT
 // ============================================================
 function init() {
-  const now = new Date();
-  document.getElementById('date-display').textContent =
-    now.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+  updateDateDisplay();
 
   // Streak row
   const streakRow = document.getElementById('streak-row');
@@ -1171,8 +1178,12 @@ function init() {
     const d = new Date(); d.setDate(d.getDate() - i);
     const key = d.toISOString().split('T')[0];
     const el = document.createElement('div');
-    el.className = 'streak-day' + (state.days[key] && (state.days[key].food.length > 0 || state.days[key].exercise.length > 0) ? ' done' : '');
+    const hasData = state.days[key] && (state.days[key].food.length > 0 || state.days[key].exercise.length > 0);
+    el.className = 'streak-day' + (hasData ? ' done' : '');
+    el.style.cursor = 'pointer';
+    el.title = key;
     el.textContent = DAYS[d.getDay()];
+    el.onclick = (function(k){ return function(){ activeDate = k; updateDateDisplay(); updateAll(); renderWeightChart(); }; })(key);
     streakRow.appendChild(el);
   }
 
@@ -1826,7 +1837,7 @@ function logWeight() {
   getToday().weight = val;
   // Also store in global weight history keyed by date
   if (!state.weightHistory) state.weightHistory = {};
-  state.weightHistory[TODAY] = val;
+  state.weightHistory[activeDate] = val;
   updateXP(10);
   saveState();
   updateAll();
@@ -2076,6 +2087,89 @@ function showBfBubble(type) {
 function closeBfBubble() {
   document.getElementById('bf-bubble').classList.remove('show');
   if (bfBubbleTimeout) { clearTimeout(bfBubbleTimeout); bfBubbleTimeout = null; }
+}
+
+
+// ============================================================
+//  DATE NAVIGATION
+// ============================================================
+function updateDateDisplay() {
+  const d = new Date(activeDate + 'T00:00:00');
+  const isToday = activeDate === TODAY;
+  const isYesterday = activeDate === getDateStr(-1);
+  let label;
+  if (isToday) label = 'Today — ' + d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+  else if (isYesterday) label = 'Yesterday — ' + d.toLocaleDateString('en-US', {month:'long', day:'numeric'});
+  else label = d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  document.getElementById('date-display').textContent = label;
+
+  // Show/hide Today button and disable next arrow if on today
+  const todayBtn = document.getElementById('today-btn');
+  const nextBtn = document.getElementById('next-day-btn');
+  if (todayBtn) todayBtn.style.display = isToday ? 'none' : 'block';
+  if (nextBtn) { nextBtn.disabled = isToday; nextBtn.style.opacity = isToday ? '0.3' : '1'; }
+
+  // Re-render mood saved state for this date
+  const tod = getToday();
+  const moodSaved = document.getElementById('mood-saved');
+  const moodNoteWrap = document.getElementById('mood-note-wrap');
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  if (tod.mood !== null) {
+    showMoodSaved(tod.mood, tod.moodNote);
+  } else {
+    if (moodSaved) moodSaved.style.display = 'none';
+    if (moodNoteWrap) moodNoteWrap.style.display = 'none';
+  }
+
+  // Update weight input for this date
+  const wi = document.getElementById('weight-input');
+  if (wi) wi.value = tod.weight || '';
+}
+
+function getDateStr(offset) {
+  const d = new Date(TODAY + 'T00:00:00');
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().split('T')[0];
+}
+
+function changeDay(delta) {
+  const d = new Date(activeDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const newDate = d.toISOString().split('T')[0];
+  if (newDate > TODAY) return; // Can't go to future
+  activeDate = newDate;
+  updateDateDisplay();
+  updateAll();
+  renderWeightChart();
+}
+
+function goToToday() {
+  activeDate = TODAY;
+  updateDateDisplay();
+  updateAll();
+  renderWeightChart();
+}
+
+function openDatePicker() {
+  const picker = document.getElementById('date-picker-input');
+  picker.max = TODAY;
+  picker.value = activeDate;
+  picker.style.position = 'fixed';
+  picker.style.top = '50px';
+  picker.style.left = '20px';
+  picker.style.opacity = '0';
+  picker.style.pointerEvents = 'auto';
+  picker.click();
+  picker.style.pointerEvents = 'none';
+}
+
+function onDatePickerChange(val) {
+  if (val && val <= TODAY) {
+    activeDate = val;
+    updateDateDisplay();
+    updateAll();
+    renderWeightChart();
+  }
 }
 
 window.addEventListener('load', init);
